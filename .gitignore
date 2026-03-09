@@ -1,0 +1,22 @@
+﻿# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# C extensions
+*.so
+
+# Environments
+.venv/
+venv/
+ENV/
+env/
+
+# VS Code / IDE
+.vscode/
+.idea/
+*tempCodeRunnerFile*
+
+# OS generated
+.DS_Store
+Thumbs.db
