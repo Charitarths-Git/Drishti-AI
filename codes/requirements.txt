@@ -1,0 +1,40 @@
+# BLV Navigation Dataset Pipeline — Requirements
+# Hardware: 8× NVIDIA RTX A6000 (49 GB each) | CUDA 12.1+ | 20 TB storage
+#
+# ── INSTALL ORDER ─────────────────────────────────────────────────────────────
+# 1.  pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+# 2.  pip install flash-attn --no-build-isolation          # CRITICAL: 3× speedup on A6000 Ampere
+# 3.  pip install -r requirements.txt
+#
+# Flash-attn note: requires CUDA toolkit + gcc. On Ubuntu:
+#   apt install build-essential && pip install flash-attn --no-build-isolation
+
+# ── Qwen2.5-VL (Step 2 — vision model) ───────────────────────────────────────
+transformers>=4.49.0
+accelerate>=0.30.0
+qwen-vl-utils>=0.0.8       # Qwen2.5-VL image/video processing utilities
+
+# ── Video + image ─────────────────────────────────────────────────────────────
+opencv-python>=4.9.0
+pillow>=10.3.0
+
+# ── Download ──────────────────────────────────────────────────────────────────
+huggingface-hub>=0.23.0
+requests>=2.31.0
+
+# ── Dataset output (Step 4) ───────────────────────────────────────────────────
+datasets>=2.19.0
+pyarrow>=15.0.0
+pandas>=2.2.0
+
+# ── Utilities ─────────────────────────────────────────────────────────────────
+tqdm>=4.66.0
+numpy>=1.26.0
+
+# ── OpenAI backend (Step 3, only if not using local Qwen) ─────────────────────
+openai>=1.30.0
+
+# ── CLIP-based frame selection (Step 1 --method clip, optional) ───────────────
+# Installed automatically via transformers, but listed explicitly:
+# torch>=2.2.0     (installed in step 1 above)
+# torchvision>=0.17.0
