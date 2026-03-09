@@ -1,0 +1,17 @@
+# Training stack for SmolVLA BLV fine-tuning
+# Install base first:
+#   pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+#   pip install flash-attn --no-build-isolation
+# Then:
+#   pip install -r requirements_train.txt
+
+transformers>=4.49.0
+accelerate>=0.34.0
+peft>=0.11.0
+datasets>=2.19.0
+pillow>=10.3.0
+tqdm>=4.66.0
+numpy>=1.26.0
+ninja>=1.11.0
+packaging>=24.0
+evaluate>=0.4.0
