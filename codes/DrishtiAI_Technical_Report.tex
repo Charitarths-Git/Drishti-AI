@@ -1,0 +1,111 @@
+\documentclass[11pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+\usepackage{graphicx}
+\usepackage{hyperref}
+\usepackage{booktabs}
+\usepackage{titlesec}
+\usepackage{amsmath}
+\usepackage{xcolor}
+\usepackage{float}
+
+\title{\textbf{DrishtiAI: On-Device Vision-Language Navigation Assistant}\\ \large Technical Engineering Report \& Analysis}
+\author{}
+\date{\today}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+This report provides a comprehensive technical analysis of DrishtiAI, an on-device Android navigation application designed for blind and low-vision (BLV) users. It details the problem statement, dataset curation, model fine-tuning strategies (SmolVLM2-500M with LoRA), and the rigorous hardware optimizations applied to deploy a multimodal pipeline on a MediaTek Dimensity 7200 mobile processor. Key achievements include reducing end-to-end inference latency from 35 seconds to 9 seconds, maintaining a 2GB RAM footprint, and implementing a novel 4-frame chronological grid for implicit motion context, all without incurring thermal throttling.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Problem Statement}
+Real-time navigation for blind and low-vision users requires continuous, accurate, and low-latency environmental understanding. Cloud-based solutions suffer from latency jitter, privacy concerns, and reliance on network availability. The objective of DrishtiAI is to deploy a fully on-device Vision-Language Model (VLM) capable of real-time spatial grounding, obstacle detection, and directional guidance on consumer-grade mobile hardware (MediaTek Dimensity 7200) while keeping resource utilization (RAM, thermals, battery) strictly bounded.
+
+\section{Model Architecture \& Fine-Tuning Strategy}
+
+\subsection{Base Model Selection}
+The core architecture utilizes \textbf{SmolVLM2-500M-Video-Instruct}. This model was chosen for its optimal parameter-to-capability ratio (totaling approximately \textbf{500 million parameters}). The architecture consists of a SigLIP-based vision encoder (\textbf{SigLIP-B/16, $\sim$93M parameters}) and a lightweight transformer language model (LM) backbone (\textbf{SmolLM2, $\sim$360M parameters}), connected via a pixel-shuffle MLP projector.
+
+\subsection{Fine-Tuning Methodology}
+To specialize the model for BLV spatial guidance without destroying its general descriptive capabilities or exceeding compute budgets, we employed \textbf{Low-Rank Adaptation (LoRA)} over a base dataset of \textbf{210,000 BLV navigation samples}.
+\begin{itemize}
+    \item \textbf{Frozen Weights:} The SigLIP vision encoder ($\sim$93M parameters) was strictly frozen. It already produces rich spatial embeddings from large-scale pre-training. Freezing it eliminated immense training costs and prevented catastrophic forgetting.
+    \item \textbf{Trainable Weights ($\sim$56M Parameters):} To preserve the core reasoning while steering output format, training was selectively applied:
+    \begin{itemize}
+        \item \textbf{LoRA Adapters ($\sim$8.7M parameters):} Low-Rank Adaptation (rank $r=16$, $\alpha=32$) was applied to all attention and MLP projection matrices (\texttt{q\_proj, k\_proj, v\_proj, o\_proj, gate\_proj, up\_proj, down\_proj}) across the \textbf{32 transformer layers} of the SmolLM2 backbone.
+        \item \textbf{Full Output Head ($\sim$47.3M parameters):} The entire language model output head (\texttt{lm\_head}) was explicitly unfrozen (\texttt{modules\_to\_save}) to allow the model to freely map to the specific navigation vocabulary (e.g., clock directions).
+    \end{itemize}
+    This resulted in approximately \textbf{56 Million trainable parameters} (roughly 11\% of the 500M total).
+    \item \textbf{Final Model Footprint:} Upon completion of fine-tuning, the LoRA adapter matrices were mathematically merged directly back into the base model's frozen weights via \texttt{merge\_and\_unload()}. Consequently, \textbf{zero parameters were permanently added or reduced}. The deployed model maintains its exact original $\sim$500M parameter footprint, avoiding any inference latency penalties that an unmerged adapter might introduce.
+\end{itemize}
+
+\subsection{Dataset Curation and Bias Mitigation}
+During initial training, the model exhibited a severe \textbf{spatial grounding collapse}, defaulting to ``6 o'clock'' for approximately 77\% of predictions regardless of true object position.
+\begin{itemize}
+    \item \textbf{Diagnosis:} Auditing the \texttt{dataset.jsonl} revealed an imbalance where egocentric camera data heavily favored objects at the bottom of the frame. The model memorized this as a safe default.
+    \item \textbf{Correction (Data Augmentation):} We implemented horizontal mirroring (flipping 3 o'clock to 9 o'clock) and rare direction upsampling (e.g., duplicating 1, 2, 4, 8 o'clock labels). This expanded the dataset from 210K to \textbf{382K samples} and flattened the directional distribution to a uniform $\sim$8-12\% per direction.
+\end{itemize}
+
+\section{On-Device Deployment \& Pipeline Engineering}
+
+\subsection{The 4-Frame Chronological Grid}
+To provide the model with temporal understanding without the overhead of optical flow models or 3D convolutions, we developed a \textbf{2x2 chronological frame composite}.
+\begin{itemize}
+    \item \textbf{Capture:} 4 sequential frames are captured within a 1-second window.
+    \item \textbf{Crop \& Resize:} Each 1280x720 (16:9) frame is center-cropped to a square and resized to 192x192 pixels.
+    \item \textbf{Composite:} The four frames are stitched into a single 384x384 image (no padding).
+    \item \textbf{Zero Interpolation Overhead:} 384x384 is the exact native input resolution of the SigLIP encoder. The grid is processed natively into 729 visual patches (14x14 px each) without upscaling or downscaling losses at the model boundary. This provides \textit{implicit motion context} allowing the VLM to infer velocity and direction.
+\end{itemize}
+
+\subsection{Live Navigation Loop}
+To prevent stale data contamination, the application uses a strict \textbf{sequential collect $\rightarrow$ infer $\rightarrow$ collect} loop. Frames are actively dropped during the inference window, ensuring the next cycle always processes the freshest environment state.
+
+\subsection{Post-Processing Spatial Correction}
+To catch residual LLM hallucinations, a deterministic post-processing layer runs directly on Android. It calculates image luminosity gradients to find the salient region and maps its pixel coordinates to clock-face angles using camera FOV trigonometry, surgically overriding incorrect LLM text outputs via regex.
+
+\section{Performance Optimization \& Hardware Benchmarks}
+
+Deploying a 500M parameter VLM on a mobile SoC required extreme optimization. Tests were conducted on a MediaTek Dimensity 7200 (8GB RAM).
+
+\subsection{Latency Reduction (35s to 9s)}
+End-to-end latency was reduced by \textbf{$\sim$3x} through the following interventions:
+\begin{enumerate}
+    \item \textbf{NNAPI Delegation:} Inference was offloaded from the CPU to the Dimensity APU 650 (NPU) using Android NNAPI, accelerating heavy matrix multiplications.
+    \item \textbf{INT4 Quantization:} The LM head was quantized to INT4 (mixed with FP16), yielding an 8x memory bandwidth reduction over FP32 and a 2x reduction over INT8.
+    \item \textbf{Resolution Capping:} Capping input at 384x384 reduced vision encoder FLOPs by 44\% compared to 512x512, with negligible loss in navigational accuracy.
+    \item \textbf{Context Management:} Batch size (\texttt{n\_batch}) was decoupled from context size, saving unnecessary pre-allocation overhead during the autoregressive generation phase.
+\end{enumerate}
+
+\subsection{Memory \& Storage Profiling}
+\begin{itemize}
+    \item \textbf{App Size:} Total APK size is $\sim$445 MB, primarily dominated by the INT4 quantized text model ($\sim$280-310 MB) and FP16 vision projector.
+    \item \textbf{RAM Usage:} Peak application RAM is \textbf{$\sim$2.0 GB}. This includes Dalvik/ART overhead, mmap'd model weights, JVM RGB byte arrays, native C++ frame copies, and the KV cache for 512 visual tokens.
+\end{itemize}
+
+\subsection{Thermal \& Power Stability}
+Despite continuous inference loops, \textbf{zero CPU throttling} and \textbf{no severe device heating} were observed during 30-minute sustained sessions. Offloading to the NPU effectively prevented thermal saturation.
+
+\section{Evaluation Metrics}
+Different frame extraction strategies were evaluated for the Video QA mode using Navigation Accuracy F-score (NAF) and Multi-frame Coherence F-score (MCF):
+\begin{table}[H]
+\centering
+\begin{tabular}{@{}lcc@{}}
+\toprule
+\textbf{Extraction Strategy} & \textbf{NAF} & \textbf{MCF} \\ \midrule
+MobileNet (Diversity Sampling) & \textbf{0.65} & \textbf{0.67} \\
+QFrame (Quality Sampling) & 0.62 & 0.65 \\ \bottomrule
+\end{tabular}
+\caption{Frame selection strategy performance. Semantic diversity (MobileNet) yields better spatial stability.}
+\end{table}
+
+\section{Conclusion}
+The DrishtiAI pipeline successfully demonstrates that state-of-the-art vision-language models can be heavily engineered for real-time edge execution. Through strategic LoRA fine-tuning, dataset debiasing, INT4 quantization, and NPU offloading, the system achieves sub-10-second latency bounds necessary for practical low-vision navigation without compromising device thermals or memory limits.
+
+\end{document}
