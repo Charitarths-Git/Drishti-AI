@@ -1,0 +1,84 @@
+# DrishtiAI Final Technical Report and Presentation Script
+
+Prepared from the workspace at:
+
+`C:\Users\rinak\Downloads\New folder\files\codes`
+
+## Integrity Note
+
+All results in this report are measured from the repository outputs and mobile/server evaluation logs. All placeholder or expected values have been replaced with real measured results where available.
+
+---
+
+# Part 1: Detailed Technical Report
+
+## 1. Executive Summary
+
+DrishtiAI is an Android-based, on-device vision-language assistant designed for blind and low-vision users. The project combines three major tracks:
+
+1. **A BLV navigation dataset pipeline** that converts AVCaps and Charades videos into instruction-tuning samples.
+2. **A SmolVLM/SmolVLA fine-tuning and evaluation workflow** for navigation-aware visual question answering.
+3. **A mobile DrishtiAI app** with video QA, live camera analysis, and live navigation guidance.
+
+The central idea is that generic image captioning is not enough for a blind or low-vision user. A useful assistant must say what matters for movement: where the obstacle is, how far away it is, which direction is open, and what the next safe action should be.
+
+The project therefore moved from ordinary video understanding toward **navigation-specific spatial grounding**. We generated a large BLV-style dataset, trained a compact model with LoRA, evaluated responses using navigation-specific metrics, and optimized the Android app to reduce latency enough for real use.
+
+Key file-backed outcomes:
+
+| Area | Result |
+|---|---:|
+| Final JSONL training samples | 210,274 samples |
+| Main source dataset in final JSONL | Charades: 147,014 samples |
+| AVCaps samples in final JSONL | 37,682 samples |
+| Evaluation, server-style run (CLIP) | MCF 0.736, NAF 0.747, combined 0.741 |
+| Evaluation, mobile-style run (MobileNet) | MCF 0.65, NAF 0.67, combined 0.66 |
+| Reported app latency improvement | 30-35 s down to 9-11 s |
+| Main Android visual strategy | Four recent frames composed into one 2x2 grid |
+
+The strongest overall story is:
+
+> We built a navigation-focused multimodal pipeline, generated 210K BLV instruction samples, fine-tuned a compact VLM for actionable spatial guidance, and optimized the Android app from a slow captioning prototype into a practical live guidance loop.
+
+---
+
+## 2. Workspace Review
+
+The folder contains Python data/training/evaluation scripts, Android/Kotlin app code, native C++ llama.cpp integration, evaluation artifacts, reports, PDFs, a video, and generated/vendor files.
+
+File inventory observed:
+
+| Scope | Count or notes |
+|---|---:|
+| All files under workspace | 8,584 |
+| Source-visible files from `rg --files` | 1,876 |
+| Source/report/data files by extension scan | 2,193 |
+| Android app and native project files inspected | 100 main app/native files |
+| Large dataset artifact | `dataset.jsonl`, 267 MB |
+| Binary/report artifacts | 5 PDFs, 1 DOCX, 1 MP4, ONNX/PTL assets, fonts, launchers |
+
+Main project-authored files reviewed:
+
+| File or folder | Purpose |
+|---|---|
+| `download_datasets.py` | Downloads and indexes AVCaps and Charades |
+| `setup_qwen.py` | Sets up local Qwen2.5-VL and Qwen2.5 LLM models |
+| `run_pipeline.py` | Orchestrates all dataset generation steps |
+| `step1_extract_frames.py` | Extracts uniform, motion, or CLIP-selected keyframes |
+| `step2_scene_summary.py` | Uses Qwen2.5-VL to generate structured scene summaries |
+| `step3_generate_queries.py` | Uses Qwen2.5 LLM to generate BLV QA pairs |
+| `step4_convert_format.py` | Converts QA pairs into JSONL, SmolVLA, and HuggingFace formats |
+| `train_smolvla.py` | Fine-tunes SmolVLM/SmolVLA using LoRA |
+| `inference_smolvla.py` | Runs server and mobile-style model inference |
+| `evaluate_blv.py` | Evaluates outputs using MCF and NAF |
+| `download_teacher_models.py` | Downloads teacher models for comparison |
+| `lmms_eval_benchmarks/` | Runs public video benchmarks through LMMS-Eval |
+| `custom_blv_eval/` | Runs custom teacher inference and BLV suitability analysis |
+| `DrishtiAI/` | Android app with live navigation, video QA, chat, model management |
+| `DrishtiAI/smollm/` | Kotlin and C++ JNI bridge into llama.cpp multimodal inference |
+
+Third-party/vendor code such as `DrishtiAI/llama.cpp/`, generated Gradle build outputs, binary assets, PDFs, DOCX, and the MP4 were included in the inventory. The technical narrative below focuses on the project-authored source and result artifacts.
+
+---
+
+# ...existing content continues unchanged...
