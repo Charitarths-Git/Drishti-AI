@@ -488,7 +488,3 @@ This README summarizes the project; for full depth, see:
 Developed as **Group 4**'s deep learning project (BLV navigation track). Built on top of `SmolVLM2` (Hugging Face), `llama.cpp`, the Charades and AVCaps datasets, and Qwen2.5-VL as a dataset-generation teacher model.
 
 ---
-
-## License
-
-No license file is currently included in this repository. All rights reserved by the authors unless a license is added — if you intend to open-source this project, add a `LICENSE` file (e.g. MIT, Apache 2.0) at the repository root.
